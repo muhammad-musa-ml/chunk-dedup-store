@@ -7,7 +7,7 @@
 #include "check.hpp"
 #include "chunker.hpp"
 #include "sha256.hpp"
-#include "util.hpp"
+#include "synth.hpp"
 
 using namespace dedup;
 
@@ -33,7 +33,7 @@ TEST(chunker_lengths_add_up_and_stay_in_bounds) {
     ChunkerConfig cfg;
     for (std::size_t n : {std::size_t{0}, std::size_t{1}, std::size_t{2048}, std::size_t{2049},
                           std::size_t{70000}, std::size_t{1 << 20}}) {
-        auto data = random_bytes(n, 7 + n);
+        auto data = synth::random_bytes(n, 7 + n);
         auto lens = cdc_chunks(data.data(), n, cfg);
         CHECK(sum(lens) == n);
         for (std::size_t i = 0; i < lens.size(); ++i) {
@@ -44,13 +44,13 @@ TEST(chunker_lengths_add_up_and_stay_in_bounds) {
 }
 
 TEST(chunker_is_deterministic) {
-    auto data = random_bytes(1 << 20, 11);
+    auto data = synth::random_bytes(1 << 20, 11);
     CHECK(cdc_chunks(data.data(), data.size()) == cdc_chunks(data.data(), data.size()));
 }
 
 TEST(chunker_average_size_is_near_the_target) {
     ChunkerConfig cfg;
-    auto data = random_bytes(8 << 20, 21);
+    auto data = synth::random_bytes(8 << 20, 21);
     auto lens = cdc_chunks(data.data(), data.size(), cfg);
     double avg = static_cast<double>(data.size()) / static_cast<double>(lens.size());
     CHECK(avg > 0.7 * cfg.avg_size && avg < 1.5 * cfg.avg_size);
@@ -80,7 +80,7 @@ TEST(chunker_rejects_bad_config) {
 // The reason to cut on content: one inserted byte near the front shifts every later byte.
 // Fixed-size chunks all change; content-defined chunks resynchronize after the edit.
 TEST(chunker_resynchronizes_after_an_insertion) {
-    auto base = random_bytes(4 << 20, 33);
+    auto base = synth::random_bytes(4 << 20, 33);
     auto edited = base;
     edited.insert(edited.begin() + 1000, 0x5a);
 
