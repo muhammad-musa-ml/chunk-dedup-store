@@ -11,6 +11,13 @@ Content-defined chunks: 2 KiB min, 8 KiB average, 64 KiB max. Fixed chunks: 8 Ki
 | fixed 8 KiB | 1.04 - 1.07 |
 | control: 10 unrelated objects, content-defined | 1.00 - 1.00 |
 
+Measured mean chunk size, over all chunks the recipes list:
+
+| chunking | mean chunk size (KiB) |
+|---|---|
+| content-defined (8 KiB is the target in the cut rule) | 9.13 - 9.24 |
+| fixed 8 KiB | 8.00 - 8.00 |
+
 ## Replication (bytes on the wire / object bytes)
 
 | chunking | version 1 to an empty remote | versions 2-10 after the earlier ones | chunks sent per version |
@@ -30,5 +37,5 @@ Content-defined chunks: 2 KiB min, 8 KiB average, 64 KiB max. Fixed chunks: 8 Ki
 
 | step | throughput |
 |---|---|
-| content-defined chunking only | 1293 MB/s (1194 - 1361) |
-| chunk, hash with SHA-256 and store | 130 MB/s (113 - 139) |
+| content-defined chunking only | 1460 MiB/s (1415 - 1503) |
+| chunk, hash with SHA-256 and store | 172 MiB/s (170 - 177) |

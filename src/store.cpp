@@ -1,12 +1,20 @@
 #include "store.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <map>
 #include <stdexcept>
 
 namespace dedup {
 
 ChunkStore::ChunkStore(StoreConfig cfg) : cfg_(cfg) {}
+
+void ChunkStore::add_refs(Entry& e, std::uint32_t n) {
+    if (n > std::numeric_limits<std::uint32_t>::max() - e.refs) {
+        throw std::overflow_error("reference count overflow");
+    }
+    e.refs += n;
+}
 
 std::vector<std::size_t> ChunkStore::split(const std::vector<std::uint8_t>& data) const {
     if (cfg_.chunking == Chunking::Fixed) return fixed_chunks(data.size(), cfg_.fixed_size);
@@ -18,7 +26,10 @@ Recipe ChunkStore::put(const std::vector<std::uint8_t>& data) {
     r.size = data.size();
     std::size_t off = 0;
     try {
-        for (std::size_t len : split(data)) {
+        const std::vector<std::size_t> lens = split(data);
+        // Reserved up front so recording a digest below cannot fail after its reference is taken.
+        r.chunks.reserve(lens.size());
+        for (std::size_t len : lens) {
             const std::uint8_t* p = data.data() + off;
             Digest d = sha256(p, len);
             Shard& s = shard_for(d);
@@ -29,7 +40,7 @@ Recipe ChunkStore::put(const std::vector<std::uint8_t>& data) {
                 if (it->second.data.size() != len || !std::equal(p, p + len, it->second.data.begin())) {
                     throw std::runtime_error("digest collision");
                 }
-                ++it->second.refs;
+                add_refs(it->second, 1);
             } else {
                 s.map.emplace(d, Entry{std::vector<std::uint8_t>(p, p + len), 1});
                 s.bytes += len;
@@ -83,7 +94,7 @@ bool ChunkStore::acquire(const Digest& d, std::uint32_t refs) {
     std::lock_guard<std::mutex> lock(s.m);
     auto it = s.map.find(d);
     if (it == s.map.end()) return false;
-    it->second.refs += refs;
+    add_refs(it->second, refs);
     return true;
 }
 
@@ -93,11 +104,13 @@ void ChunkStore::insert(const Digest& d, std::vector<std::uint8_t> data, std::ui
     std::lock_guard<std::mutex> lock(s.m);
     auto it = s.map.find(d);
     if (it != s.map.end()) {
-        it->second.refs += refs;
+        if (it->second.data != data) throw std::runtime_error("digest collision");
+        add_refs(it->second, refs);
         return;
     }
-    s.bytes += data.size();
+    const std::uint64_t size = data.size();
     s.map.emplace(d, Entry{std::move(data), refs});
+    s.bytes += size;  // after the emplace, so a failed allocation leaves the count right
 }
 
 std::uint64_t ChunkStore::release(const Digest& d, std::uint32_t refs) {

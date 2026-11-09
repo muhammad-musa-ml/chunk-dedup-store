@@ -1,4 +1,4 @@
-// Writes results/summary.md. Every number in the README is copied from that file.
+// Writes results/summary.md from this one run. The README copies its tables from that file.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -59,7 +59,7 @@ struct Timing {
         std::vector<double> s = mbps;
         std::sort(s.begin(), s.end());
         char out[160];
-        std::snprintf(out, sizeof out, "%.0f MB/s (%.0f - %.0f)", s[s.size() / 2], s.front(), s.back());
+        std::snprintf(out, sizeof out, "%.0f MiB/s (%.0f - %.0f)", s[s.size() / 2], s.front(), s.back());
         return out;
     }
 };
@@ -68,6 +68,7 @@ struct Timing {
 
 int main() {
     Range cdc_ratio, fixed_ratio, control_ratio;
+    Range cdc_mean_chunk, fixed_mean_chunk;  // KiB, over all chunks listed in the recipes
     Range cdc_wire, fixed_wire, cdc_first_wire;
     Range cdc_chunks_sent, fixed_chunks_sent;
     Range leaked_cdc, leaked_fixed, freed_cdc;
@@ -85,18 +86,23 @@ int main() {
         struct Run {
             StoreConfig cfg;
             Range* ratio;
+            Range* mean_chunk;
             Range* wire;
             Range* sent;
             Range* leaked;
         };
-        Range unused_freed;
-        Run runs[2] = {{cdc_cfg, &cdc_ratio, &cdc_wire, &cdc_chunks_sent, &leaked_cdc},
-                       {fixed_cfg, &fixed_ratio, &fixed_wire, &fixed_chunks_sent, &leaked_fixed}};
+        Run runs[2] = {{cdc_cfg, &cdc_ratio, &cdc_mean_chunk, &cdc_wire, &cdc_chunks_sent, &leaked_cdc},
+                       {fixed_cfg, &fixed_ratio, &fixed_mean_chunk, &fixed_wire, &fixed_chunks_sent, &leaked_fixed}};
         for (int k = 0; k < 2; ++k) {
             ChunkStore src(runs[k].cfg), dst(runs[k].cfg);
             std::vector<Recipe> recipes;
-            for (const auto& v : versions) recipes.push_back(src.put(v));
+            std::uint64_t listed_chunks = 0;
+            for (const auto& v : versions) {
+                recipes.push_back(src.put(v));
+                listed_chunks += recipes.back().chunks.size();
+            }
             runs[k].ratio->add(static_cast<double>(logical) / static_cast<double>(src.stored_bytes()));
+            runs[k].mean_chunk->add(static_cast<double>(logical) / static_cast<double>(listed_chunks) / 1024.0);
             must(src.get(recipes.back()) == versions.back(), "source round trip");
 
             // Replicate in order; version 1 goes to an empty remote, the rest to a remote that has the earlier ones.
@@ -184,6 +190,13 @@ int main() {
     md += "| content-defined | " + range_str(cdc_ratio, "%.2f") + " |\n";
     md += "| fixed 8 KiB | " + range_str(fixed_ratio, "%.2f") + " |\n";
     md += "| control: 10 unrelated objects, content-defined | " + range_str(control_ratio, "%.2f") + " |\n";
+    add("");
+    add("Measured mean chunk size, over all chunks the recipes list:");
+    add("");
+    add("| chunking | mean chunk size (KiB) |");
+    add("|---|---|");
+    md += "| content-defined (8 KiB is the target in the cut rule) | " + range_str(cdc_mean_chunk, "%.2f") + " |\n";
+    md += "| fixed 8 KiB | " + range_str(fixed_mean_chunk, "%.2f") + " |\n";
     add("");
     add("## Replication (bytes on the wire / object bytes)");
     add("");

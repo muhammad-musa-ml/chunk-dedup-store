@@ -19,6 +19,9 @@ ReplicateResult replicate(const ChunkStore& src, const Recipe& r, ChunkStore& ds
     using Held = std::vector<std::pair<Digest, std::uint32_t>>;
     Held held;     // references the remote now holds for this recipe
     Held missing;  // digests the remote answered it does not have
+    // Reserved before any reference is taken, so recording one below cannot fail and leave it unreleased.
+    held.reserve(wanted.size());
+    missing.reserve(wanted.size());
     try {
         for (const auto& [d, n] : wanted) {
             if (dst.acquire(d, n)) {

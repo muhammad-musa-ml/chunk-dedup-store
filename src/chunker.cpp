@@ -64,9 +64,12 @@ std::size_t next_cut(const std::uint8_t* p, std::size_t left, const ChunkerConfi
 
 std::vector<std::size_t> cdc_chunks(const std::uint8_t* data, std::size_t n,
                                     const ChunkerConfig& cfg) {
-    if (cfg.avg_size == 0 || (cfg.avg_size & (cfg.avg_size - 1)) != 0 ||
-        cfg.min_size >= cfg.avg_size || cfg.avg_size >= cfg.max_size) {
-        throw std::invalid_argument("chunker needs min < avg < max and avg a power of two");
+    // avg >= 16 keeps the loose mask (avg bits - 2) at two bits or more; the masks are shifts by 64 - bits.
+    if (cfg.avg_size < 16 || cfg.avg_size > (std::size_t{1} << 30) ||
+        (cfg.avg_size & (cfg.avg_size - 1)) != 0 || cfg.min_size >= cfg.avg_size ||
+        cfg.avg_size >= cfg.max_size) {
+        throw std::invalid_argument(
+            "chunker needs min < avg < max, with avg a power of two between 16 and 2^30");
     }
     const unsigned bits = log2_exact(cfg.avg_size);
     const Masks masks{top_mask(bits + 2), top_mask(bits - 2)};

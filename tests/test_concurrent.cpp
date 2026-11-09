@@ -66,9 +66,13 @@ TEST(concurrent_readers_see_whole_objects_while_writers_churn) {
             }
         });
     }
+    int reads = 0;
     std::thread reader([&] {
         try {
-            while (!stop) CHECK(store.get(held) == pool[0]);
+            do {
+                CHECK(store.get(held) == pool[0]);
+                ++reads;
+            } while (!stop);
         } catch (const std::exception&) {
             CHECK(false);
         }
@@ -76,5 +80,6 @@ TEST(concurrent_readers_see_whole_objects_while_writers_churn) {
     for (auto& th : threads) th.join();
     stop = true;
     reader.join();
+    CHECK(reads >= 1);
     CHECK(store.audit({held}).empty());
 }

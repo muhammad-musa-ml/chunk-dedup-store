@@ -6,8 +6,10 @@
 namespace dedup {
 
 // Content-defined chunking with a Gear rolling hash and normalized cut masks.
-// A cut depends on the 64 bytes before it, so inserting or deleting bytes only
-// moves the boundaries near the edit; the rest of the stream cuts at the same places.
+// Whether a position is a cut is decided by a hash of at most the 64 bytes before it, plus
+// its distance from the previous cut (the minimum size, the mask switch at the average size
+// and the forced cut at the maximum). After an insertion or deletion the cuts fall at the
+// same places again within a few chunks, so most of the stream chunks as before.
 struct ChunkerConfig {
     std::size_t min_size = 2048;
     std::size_t avg_size = 8192;  // must be a power of two

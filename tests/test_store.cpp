@@ -94,6 +94,31 @@ TEST(store_rejects_a_chunk_that_does_not_match_its_digest) {
     CHECK(s.chunk_count() == 0);
 }
 
+// A count that would wrap to zero must throw and leave the chunk as it was.
+TEST(store_refuses_a_reference_count_that_would_overflow) {
+    ChunkStore s;
+    std::vector<std::uint8_t> blob = synth::random_bytes(100, 17);  // one chunk: shorter than the minimum
+    Digest d = sha256(blob.data(), blob.size());
+    s.insert(d, blob, 0xFFFFFFFFu);
+    bool acquire_threw = false, put_threw = false;
+    try {
+        s.acquire(d, 1);
+    } catch (const std::overflow_error&) {
+        acquire_threw = true;
+    }
+    try {
+        s.put(blob);
+    } catch (const std::overflow_error&) {
+        put_threw = true;
+    }
+    CHECK(acquire_threw);
+    CHECK(put_threw);
+    CHECK(s.chunk_count() == 1);
+    CHECK(s.release(d, 0xFFFFFFFFu) == blob.size());  // still holds exactly the original count
+    CHECK(s.chunk_count() == 0);
+    CHECK(s.stored_bytes() == 0);
+}
+
 TEST(store_audit_reports_a_leak_and_a_dangling_reference) {
     ChunkStore s;
     Recipe a = s.put(synth::random_bytes(50000, 13));

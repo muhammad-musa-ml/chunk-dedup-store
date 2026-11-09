@@ -37,7 +37,11 @@ public:
 
     Recipe put(const std::vector<std::uint8_t>& data);
     std::vector<std::uint8_t> get(const Recipe& r) const;  // throws if a chunk is missing
-    std::uint64_t remove(const Recipe& r);                 // bytes freed; throws on a second remove
+    // Drops one reference per entry and returns the bytes freed. Removing a recipe twice is a
+    // caller error. It throws once a chunk has no references left, but while other objects hold
+    // the same chunks a second remove cannot be told from a real one and takes their references.
+    // After a throw the recipe is partly removed.
+    std::uint64_t remove(const Recipe& r);
 
     // Pieces the replication step uses.
     bool contains(const Digest& d) const;
@@ -66,6 +70,8 @@ private:
     };
     static constexpr std::size_t kShards = 16;
 
+    // Counts are 32-bit; adding past the end throws instead of wrapping to zero.
+    static void add_refs(Entry& e, std::uint32_t n);
     Shard& shard_for(const Digest& d) { return shards_[d[0] % kShards]; }
     const Shard& shard_for(const Digest& d) const { return shards_[d[0] % kShards]; }
     std::vector<std::size_t> split(const std::vector<std::uint8_t>& data) const;

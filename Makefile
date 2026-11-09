@@ -5,7 +5,7 @@ CXXFLAGS = -std=c++20 -O2 -g $(WARN) -Isrc -pthread
 SRC := $(wildcard src/*.cpp)
 TESTSRC := $(wildcard tests/*.cpp)
 
-.PHONY: test tsan bench clean
+.PHONY: test tsan bench mutants clean
 
 test: build/tests
 > build/tests
@@ -16,6 +16,11 @@ tsan: build/tests_tsan
 
 bench: build/bench
 > build/bench
+
+# Breaks one thing at a time in copies under build/mut and checks that the tests notice.
+mutants:
+> python3 tools/mutate.py . build/mut
+> bash tools/run_mutants.sh build/mut
 
 build/tests: $(SRC) $(TESTSRC) $(wildcard src/*.hpp tests/*.hpp)
 > mkdir -p build
